@@ -1,0 +1,31 @@
+version: '3.8'
+
+services:
+  db:
+    image: postgres:15
+    container_name: clarito_db
+    environment:
+      POSTGRES_USER: clarito
+      POSTGRES_PASSWORD: clarito123
+      POSTGRES_DB: clarito_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  backend:
+    build: ./backend
+    container_name: clarito_backend
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgresql://clarito:clarito123@db:5432/clarito_db
+    ports:
+      - "8000:8000"
+    depends_on:
+      - db
+    volumes:
+      - ./backend:/app
+
+volumes:
+  postgres_data:
