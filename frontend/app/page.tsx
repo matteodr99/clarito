@@ -34,7 +34,7 @@ export default function Home() {
   const [filter, setFilter] = useState<"all" | "todo" | "in progress" | "done">("all");
   const [dark, setDark] = useState(false);
 
-  const API = "http://localhost:8000";
+  const API = process.env.NEXT_PUBLIC_API_URL || "";
 
   useEffect(() => { fetchTasks(); }, []);
 
