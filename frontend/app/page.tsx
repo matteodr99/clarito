@@ -53,7 +53,7 @@ export default function Home() {
   };
 
   async function fetchTasks() {
-    const res = await fetch(`${API}/tasks/`);
+    const res = await fetch(`${API}/api/tasks/`);
     const data = await res.json();
     setTasks(data);
   }
@@ -63,7 +63,7 @@ export default function Home() {
     if (!title.trim()) return;
     setAiLoading(true);
     try {
-      const res = await fetch(`${API}/tasks/`, {
+      const res = await fetch(`${API}/api/tasks/`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ title, description }),
@@ -80,7 +80,7 @@ export default function Home() {
 
   async function updateStatus(task: Task) {
     const nextStatus = statusConfig[task.status].next;
-    const res = await fetch(`${API}/tasks/${task.id}`, {
+    const res = await fetch(`${API}/api/tasks/${task.id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ status: nextStatus }),
@@ -90,7 +90,7 @@ export default function Home() {
   }
 
   async function deleteTask(id: number) {
-    await fetch(`${API}/tasks/${id}`, { method: "DELETE" });
+    await fetch(`${API}/api/tasks/${id}`, { method: "DELETE" });
     setTasks(tasks.filter((t) => t.id !== id));
   }
 
