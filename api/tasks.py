@@ -1,25 +1,12 @@
 from http.server import BaseHTTPRequestHandler
-from fastapi import FastAPI
-from fastapi.middleware.cors import CORSMiddleware
+import json
+import os
+from urllib.parse import urlparse, parse_qs
 from sqlalchemy import create_engine, Column, Integer, String, DateTime
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
-from pydantic import BaseModel
-from typing import Optional
 from google import genai
-import os
-import json
 from datetime import datetime
-
-app = FastAPI()
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
 
 DATABASE_URL = os.getenv("DATABASE_URL")
 engine = create_engine(DATABASE_URL)
@@ -39,21 +26,17 @@ class Task(Base):
 
 Base.metadata.create_all(bind=engine)
 
-class TaskCreate(BaseModel):
-    title: str
-    description: Optional[str] = None
-
-class TaskUpdate(BaseModel):
-    title: Optional[str] = None
-    description: Optional[str] = None
-    priority: Optional[str] = None
-    category: Optional[str] = None
-    estimated_time: Optional[str] = None
-    status: Optional[str] = None
-
 client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
 
-def get_ai_suggestion(title: str, description: str = ""):
+def task_to_dict(t):
+    return {
+        "id": t.id, "title": t.title, "description": t.description,
+        "priority": t.priority, "category": t.category,
+        "estimated_time": t.estimated_time, "status": t.status,
+        "created_at": t.created_at.isoformat()
+    }
+
+def get_ai_suggestion(title, description=""):
     prompt = f"""
     Analyze this task and respond ONLY with valid JSON, no markdown, no backticks.
     Task: {title}
@@ -61,89 +44,97 @@ def get_ai_suggestion(title: str, description: str = ""):
     Respond exactly in this format:
     {{"priority": "high|medium|low", "category": "work|personal|urgent|study|other", "estimated_time": "e.g. 30 minutes, 2 hours, 1 day"}}
     """
-    response = client.models.generate_content(
-        model="gemini-2.0-flash",
-        contents=prompt
-    )
+    response = client.models.generate_content(model="gemini-2.0-flash", contents=prompt)
     return json.loads(response.text.strip())
 
-@app.get("/api/tasks")
-def get_tasks():
-    db = SessionLocal()
-    try:
-        tasks = db.query(Task).all()
-        return [{"id": t.id, "title": t.title, "description": t.description,
-                 "priority": t.priority, "category": t.category,
-                 "estimated_time": t.estimated_time, "status": t.status,
-                 "created_at": t.created_at.isoformat()} for t in tasks]
-    finally:
-        db.close()
+class handler(BaseHTTPRequestHandler):
 
-@app.post("/api/tasks")
-def create_task(task: TaskCreate):
-    db = SessionLocal()
-    try:
-        suggestion = get_ai_suggestion(task.title, task.description or "")
-        db_task = Task(
-            title=task.title,
-            description=task.description,
-            priority=suggestion["priority"],
-            category=suggestion["category"],
-            estimated_time=suggestion["estimated_time"]
-        )
-        db.add(db_task)
-        db.commit()
-        db.refresh(db_task)
-        return {"id": db_task.id, "title": db_task.title, "description": db_task.description,
-                "priority": db_task.priority, "category": db_task.category,
-                "estimated_time": db_task.estimated_time, "status": db_task.status,
-                "created_at": db_task.created_at.isoformat()}
-    finally:
-        db.close()
+    def do_OPTIONS(self):
+        self.send_response(200)
+        self._send_cors_headers()
+        self.end_headers()
 
-@app.get("/api/tasks/{task_id}")
-def get_task(task_id: int):
-    db = SessionLocal()
-    try:
-        task = db.query(Task).filter(Task.id == task_id).first()
-        if not task:
-            return {"error": "Task not found"}, 404
-        return {"id": task.id, "title": task.title, "description": task.description,
-                "priority": task.priority, "category": task.category,
-                "estimated_time": task.estimated_time, "status": task.status,
-                "created_at": task.created_at.isoformat()}
-    finally:
-        db.close()
+    def _send_cors_headers(self):
+        self.send_header("Access-Control-Allow-Origin", "*")
+        self.send_header("Access-Control-Allow-Methods", "GET, POST, PATCH, DELETE, OPTIONS")
+        self.send_header("Access-Control-Allow-Headers", "Content-Type")
 
-@app.patch("/api/tasks/{task_id}")
-def update_task(task_id: int, task_update: TaskUpdate):
-    db = SessionLocal()
-    try:
-        task = db.query(Task).filter(Task.id == task_id).first()
-        if not task:
-            return {"error": "Task not found"}, 404
-        for field, value in task_update.model_dump(exclude_unset=True).items():
-            setattr(task, field, value)
-        db.commit()
-        db.refresh(task)
-        return {"id": task.id, "title": task.title, "description": task.description,
-                "priority": task.priority, "category": task.category,
-                "estimated_time": task.estimated_time, "status": task.status,
-                "created_at": task.created_at.isoformat()}
-    finally:
-        db.close()
+    def _send_json(self, data, status=200):
+        self.send_response(status)
+        self._send_cors_headers()
+        self.send_header("Content-Type", "application/json")
+        self.end_headers()
+        self.wfile.write(json.dumps(data).encode())
 
-@app.delete("/api/tasks/{task_id}")
-def delete_task(task_id: int):
-    db = SessionLocal()
-    try:
-        task = db.query(Task).filter(Task.id == task_id).first()
-        if not task:
-            return {"error": "Task not found"}, 404
-        db.delete(task)
-        db.commit()
-        return {"message": "Task deleted successfully"}
-    finally:
-        db.close()
+    def _get_body(self):
+        length = int(self.headers.get("Content-Length", 0))
+        return json.loads(self.rfile.read(length)) if length else {}
 
-handler = app
+    def _get_task_id(self):
+        parts = self.path.split("/")
+        try:
+            return int(parts[-1])
+        except ValueError:
+            return None
+
+    def do_GET(self):
+        db = SessionLocal()
+        try:
+            task_id = self._get_task_id()
+            if task_id:
+                task = db.query(Task).filter(Task.id == task_id).first()
+                if not task:
+                    return self._send_json({"error": "Task not found"}, 404)
+                return self._send_json(task_to_dict(task))
+            tasks = db.query(Task).all()
+            return self._send_json([task_to_dict(t) for t in tasks])
+        finally:
+            db.close()
+
+    def do_POST(self):
+        db = SessionLocal()
+        try:
+            body = self._get_body()
+            suggestion = get_ai_suggestion(body.get("title", ""), body.get("description", ""))
+            task = Task(
+                title=body["title"],
+                description=body.get("description"),
+                priority=suggestion["priority"],
+                category=suggestion["category"],
+                estimated_time=suggestion["estimated_time"]
+            )
+            db.add(task)
+            db.commit()
+            db.refresh(task)
+            return self._send_json(task_to_dict(task))
+        finally:
+            db.close()
+
+    def do_PATCH(self):
+        db = SessionLocal()
+        try:
+            task_id = self._get_task_id()
+            task = db.query(Task).filter(Task.id == task_id).first()
+            if not task:
+                return self._send_json({"error": "Task not found"}, 404)
+            body = self._get_body()
+            for field, value in body.items():
+                setattr(task, field, value)
+            db.commit()
+            db.refresh(task)
+            return self._send_json(task_to_dict(task))
+        finally:
+            db.close()
+
+    def do_DELETE(self):
+        db = SessionLocal()
+        try:
+            task_id = self._get_task_id()
+            task = db.query(Task).filter(Task.id == task_id).first()
+            if not task:
+                return self._send_json({"error": "Task not found"}, 404)
+            db.delete(task)
+            db.commit()
+            return self._send_json({"message": "Task deleted successfully"})
+        finally:
+            db.close()
