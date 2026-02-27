@@ -62,7 +62,7 @@ def get_ai_suggestion(title: str, description: str = ""):
     {{"priority": "high|medium|low", "category": "work|personal|urgent|study|other", "estimated_time": "e.g. 30 minutes, 2 hours, 1 day"}}
     """
     response = client.models.generate_content(
-        model="gemini-2.0-flash",
+        model="gemini-2.5-flash",
         contents=prompt
     )
     return json.loads(response.text.strip())
