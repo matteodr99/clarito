@@ -6,7 +6,9 @@
 ![Stack](https://img.shields.io/badge/Frontend-Next.js-000000?style=flat-square)
 ![Stack](https://img.shields.io/badge/Database-PostgreSQL-336791?style=flat-square)
 ![Stack](https://img.shields.io/badge/AI-Gemini-4285F4?style=flat-square)
-![Stack](https://img.shields.io/badge/Deploy-Docker-2496ED?style=flat-square)
+![Stack](https://img.shields.io/badge/Deploy-Vercel-000000?style=flat-square)
+![Stack](https://img.shields.io/badge/Tests-Pytest-0A9EDC?style=flat-square)
+![CI](https://github.com/matteodr99/clarito/actions/workflows/test.yml/badge.svg)
 
 ---
 
@@ -17,6 +19,8 @@
 - **Status Management** — Move tasks from *To Do* → *In Progress* → *Done* with a single click
 - **Filters** — Filter tasks by status
 - **Dark/Light Mode** — Smooth animated theme switching
+- **Unit Tested** — 10 unit tests covering API endpoints and AI logic
+- **CI/CD** — GitHub Actions automatically runs tests on every push and pull request
 - **Auto-documented REST API** — Swagger UI available at `/docs` out of the box
 
 ---
@@ -26,9 +30,10 @@
 ### Backend
 - **[FastAPI](https://fastapi.tiangolo.com/)** — Modern, high-performance Python framework for REST APIs
 - **[SQLAlchemy](https://www.sqlalchemy.org/)** — ORM for database management
-- **[PostgreSQL](https://www.postgresql.org/)** — Relational database
+- **[PostgreSQL](https://www.postgresql.org/)** — Relational database (Supabase in production)
 - **[Google Gemini AI](https://ai.google.dev/)** — LLM for intelligent task analysis
 - **[Pydantic](https://docs.pydantic.dev/)** — Data validation
+- **[Pytest](https://pytest.org/)** — Unit testing
 
 ### Frontend
 - **[Next.js 14](https://nextjs.org/)** — React framework with App Router
@@ -36,8 +41,11 @@
 - **[Tailwind CSS](https://tailwindcss.com/)** — Utility-first styling
 
 ### Infrastructure
-- **[Docker](https://www.docker.com/)** — Containerization
+- **[Docker](https://www.docker.com/)** — Containerization for local development
 - **[Docker Compose](https://docs.docker.com/compose/)** — Local service orchestration
+- **[Vercel](https://vercel.com/)** — Frontend + serverless backend deployment
+- **[Supabase](https://supabase.com/)** — Managed PostgreSQL in production
+- **[GitHub Actions](https://github.com/features/actions)** — CI/CD pipeline
 
 ---
 
@@ -45,6 +53,9 @@
 
 ```
 clarito/
+├── .github/
+│   └── workflows/
+│       └── test.yml         # CI/CD pipeline
 ├── backend/
 │   ├── app/
 │   │   ├── __init__.py
@@ -54,12 +65,20 @@ clarito/
 │   │   ├── database.py      # Database configuration
 │   │   └── routers/
 │   │       └── tasks.py     # Task endpoints + AI logic
+│   ├── tests/
+│   │   ├── conftest.py      # Test configuration + fixtures
+│   │   ├── test_tasks.py    # API endpoint tests
+│   │   └── test_ai.py       # AI suggestion tests
 │   ├── requirements.txt
 │   └── Dockerfile
+├── api/
+│   └── tasks.py             # Vercel serverless handler
 ├── frontend/
 │   └── app/
 │       └── page.tsx         # Main UI
 ├── docker-compose.yml
+├── vercel.json
+├── requirements.txt         # Vercel Python dependencies
 ├── .env                     # Environment variables (never commit!)
 └── README.md
 ```
@@ -77,7 +96,7 @@ clarito/
 ### 1. Clone the repository
 
 ```bash
-git clone https://github.com/your-username/clarito.git
+git clone https://github.com/matteodr99/clarito.git
 cd clarito
 ```
 
@@ -109,6 +128,35 @@ npm run dev
 ```
 
 The frontend will be available at `http://localhost:3000`.
+
+---
+
+## 🧪 Running Tests
+
+```bash
+cd backend
+pip install -r requirements.txt
+pytest tests/ -v
+```
+
+Expected output:
+
+```
+tests/test_ai.py::test_get_ai_suggestion_returns_correct_fields PASSED
+tests/test_ai.py::test_get_ai_suggestion_with_empty_description PASSED
+tests/test_ai.py::test_get_ai_suggestion_invalid_json_raises PASSED
+tests/test_tasks.py::test_get_tasks_empty PASSED
+tests/test_tasks.py::test_create_task PASSED
+tests/test_tasks.py::test_get_task_not_found PASSED
+tests/test_tasks.py::test_get_task_found PASSED
+tests/test_tasks.py::test_delete_task_not_found PASSED
+tests/test_tasks.py::test_delete_task_success PASSED
+tests/test_tasks.py::test_update_task_status PASSED
+
+10 passed in 0.06s
+```
+
+Tests run automatically on every push and pull request via **GitHub Actions**.
 
 ---
 
@@ -167,21 +215,32 @@ You can always manually edit these values after creation.
 
 ---
 
+## 🔁 CI/CD Pipeline
+
+Every push and pull request to `main` triggers the GitHub Actions workflow which:
+
+1. Sets up Python 3.11
+2. Installs backend dependencies
+3. Runs all 10 unit tests with Pytest
+4. Reports pass/fail status directly on the commit and pull request
+
+---
+
 ## 🚢 Production Deployment
 
-### Backend → Railway
-
-1. Create an account at [railway.app](https://railway.app)
-2. Connect your GitHub repository
-3. Add environment variables (`GEMINI_API_KEY`, `DATABASE_URL`)
-4. Railway automatically detects the `Dockerfile` and deploys
-
-### Frontend → Vercel
+### Backend + Frontend → Vercel
 
 1. Create an account at [vercel.com](https://vercel.com)
 2. Import the GitHub repository
-3. Set the root directory to `frontend`
-4. Update the `API` variable in `page.tsx` with your Railway backend URL
+3. Add environment variables:
+   - `GEMINI_API_KEY`
+   - `DATABASE_URL` (Supabase connection string with port 6543)
+4. Vercel automatically deploys both the Next.js frontend and the Python serverless functions
+
+### Database → Supabase
+
+1. Create a free project at [supabase.com](https://supabase.com)
+2. Use the **Transaction Pooler** connection string (port 6543) for Vercel compatibility
 
 ---
 
@@ -192,6 +251,7 @@ You can always manually edit these values after creation.
 - [ ] Due date notifications
 - [ ] Stats & analytics dashboard
 - [ ] Calendar integration
+- [ ] Integration tests
 
 ---
 
