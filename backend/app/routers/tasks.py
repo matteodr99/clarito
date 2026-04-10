@@ -10,7 +10,7 @@ from ..models import Task
 from ..schemas import TaskCreate, TaskUpdate, TaskResponse, AISuggestion
 from ..config import config
 
-router = APIRouter(prefix="/api/tasks", tags=["tasks"])
+router = APIRouter(prefix="/tasks", tags=["tasks"])
 
 client = genai.Client(api_key=config.GEMINI_API_KEY)
 
