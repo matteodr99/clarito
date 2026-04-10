@@ -114,8 +114,9 @@ DATABASE_URL=postgresql://clarito:clarito123@db:5432/clarito_db
 ```bash
 cd backend
 uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+```
 
-### 3. Start the backend with Docker
+### 4. Start the backend with Docker
 
 ```bash
 docker-compose up --build
@@ -123,7 +124,7 @@ docker-compose up --build
 
 The backend will be available at `http://localhost:8000`.
 
-### 4. Start the frontend
+### 5. Start the frontend
 
 In a new terminal:
 
@@ -172,19 +173,19 @@ Full interactive documentation is available at **[http://localhost:8000/docs](ht
 
 ### Endpoints
 
-| Method | Endpoint | Description |
-|--------|----------|-------------|
-| `GET` | `/tasks/` | List all tasks |
-| `POST` | `/tasks/` | Create a new task (with AI analysis) |
-| `GET` | `/tasks/{id}` | Get a single task |
-| `PATCH` | `/tasks/{id}` | Update a task |
-| `DELETE` | `/tasks/{id}` | Delete a task |
+| Method | Endpoint      | Description |
+|--------|---------------|-------------|
+| `GET` | `/api/tasks/` | List all tasks |
+| `POST` | `/api/tasks/`     | Create a new task (with AI analysis) |
+| `GET` | `/api/tasks/{id}` | Get a single task |
+| `PATCH` | `/api/tasks/{id}` | Update a task |
+| `DELETE` | `/api/tasks/{id}` | Delete a task |
 
 ### Example: Create a task
 
 **Request**
 ```http
-POST /tasks/
+POST /api/tasks/
 Content-Type: application/json
 
 {
