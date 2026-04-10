@@ -109,6 +109,12 @@ GEMINI_API_KEY=your_api_key_here
 DATABASE_URL=postgresql://clarito:clarito123@db:5432/clarito_db
 ```
 
+### 3. Start the backend (locally)
+
+```bash
+cd backend
+uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+
 ### 3. Start the backend with Docker
 
 ```bash

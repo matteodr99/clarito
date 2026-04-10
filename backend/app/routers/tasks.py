@@ -1,17 +1,18 @@
-from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy.orm import Session
-from typing import List
-from google import genai
-import os
 import json
+from typing import List
+
+from google import genai
+from sqlalchemy.orm import Session
+from fastapi import APIRouter, Depends, HTTPException
 
 from ..database import get_db
 from ..models import Task
 from ..schemas import TaskCreate, TaskUpdate, TaskResponse, AISuggestion
+from ..config import config
 
 router = APIRouter(prefix="/tasks", tags=["tasks"])
 
-client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
+client = genai.Client(api_key=config.GEMINI_API_KEY)
 
 
 def get_ai_suggestion(title: str, description: str = "") -> AISuggestion:
