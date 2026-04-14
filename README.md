@@ -254,10 +254,8 @@ Every push and pull request to `main` triggers the GitHub Actions workflow which
 ## 🔮 Roadmap
 
 - [ ] User authentication
-- [ ] Drag & drop to reorder tasks
 - [ ] Due date notifications
 - [ ] Stats & analytics dashboard
-- [ ] Calendar integration
 - [ ] Integration tests
 
 ---
