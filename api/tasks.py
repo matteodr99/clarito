@@ -4,7 +4,7 @@ from sqlalchemy import create_engine, Column, Integer, String, DateTime
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 from pydantic import BaseModel
-from typing import Optional
+from typing import Optional, List
 from google import genai
 from mangum import Mangum
 import os
@@ -26,6 +26,7 @@ engine = create_engine(DATABASE_URL)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 
+
 class Task(Base):
     __tablename__ = "tasks"
     id = Column(Integer, primary_key=True, index=True)
@@ -35,13 +36,35 @@ class Task(Base):
     category = Column(String, default="general")
     estimated_time = Column(String, nullable=True)
     status = Column(String, default="todo")
+    order = Column(Integer, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
+
 Base.metadata.create_all(bind=engine)
+
+
+def _task_dict(t):
+    return {
+        "id": t.id,
+        "title": t.title,
+        "description": t.description,
+        "priority": t.priority,
+        "category": t.category,
+        "estimated_time": t.estimated_time,
+        "status": t.status,
+        "order": t.order,
+        "created_at": t.created_at.isoformat(),
+    }
+
+
+def _sorted(tasks):
+    return sorted(tasks, key=lambda t: (t.order is None, t.order if t.order is not None else 0, t.created_at))
+
 
 class TaskCreate(BaseModel):
     title: str
     description: Optional[str] = None
+
 
 class TaskUpdate(BaseModel):
     title: Optional[str] = None
@@ -50,8 +73,15 @@ class TaskUpdate(BaseModel):
     category: Optional[str] = None
     estimated_time: Optional[str] = None
     status: Optional[str] = None
+    order: Optional[int] = None
+
+
+class TaskReorder(BaseModel):
+    ordered_ids: List[int]
+
 
 client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
+
 
 def get_ai_suggestion(title: str, description: str = ""):
     prompt = f"""
@@ -67,39 +97,53 @@ def get_ai_suggestion(title: str, description: str = ""):
     )
     return json.loads(response.text.strip())
 
+
 @app.get("/api/tasks")
 def get_tasks():
     db = SessionLocal()
     try:
-        tasks = db.query(Task).all()
-        return [{"id": t.id, "title": t.title, "description": t.description,
-                 "priority": t.priority, "category": t.category,
-                 "estimated_time": t.estimated_time, "status": t.status,
-                 "created_at": t.created_at.isoformat()} for t in tasks]
+        tasks = _sorted(db.query(Task).all())
+        return [_task_dict(t) for t in tasks]
     finally:
         db.close()
+
+
+@app.post("/api/tasks/reorder")
+def reorder_tasks(payload: TaskReorder):
+    db = SessionLocal()
+    try:
+        for position, task_id in enumerate(payload.ordered_ids):
+            task = db.query(Task).filter(Task.id == task_id).first()
+            if task:
+                task.order = position
+        db.commit()
+        tasks = _sorted(db.query(Task).all())
+        return [_task_dict(t) for t in tasks]
+    finally:
+        db.close()
+
 
 @app.post("/api/tasks")
 def create_task(task: TaskCreate):
     db = SessionLocal()
     try:
         suggestion = get_ai_suggestion(task.title, task.description or "")
+        max_order = db.query(Task).count()
         db_task = Task(
             title=task.title,
             description=task.description,
             priority=suggestion["priority"],
             category=suggestion["category"],
-            estimated_time=suggestion["estimated_time"]
+            estimated_time=suggestion["estimated_time"],
+            order=max_order,
         )
         db.add(db_task)
         db.commit()
         db.refresh(db_task)
-        return {"id": db_task.id, "title": db_task.title, "description": db_task.description,
-                "priority": db_task.priority, "category": db_task.category,
-                "estimated_time": db_task.estimated_time, "status": db_task.status,
-                "created_at": db_task.created_at.isoformat()}
+        return _task_dict(db_task)
     finally:
         db.close()
+
 
 @app.get("/api/tasks/{task_id}")
 def get_task(task_id: int):
@@ -108,12 +152,10 @@ def get_task(task_id: int):
         task = db.query(Task).filter(Task.id == task_id).first()
         if not task:
             return {"error": "Task not found"}
-        return {"id": task.id, "title": task.title, "description": task.description,
-                "priority": task.priority, "category": task.category,
-                "estimated_time": task.estimated_time, "status": task.status,
-                "created_at": task.created_at.isoformat()}
+        return _task_dict(task)
     finally:
         db.close()
+
 
 @app.patch("/api/tasks/{task_id}")
 def update_task(task_id: int, task_update: TaskUpdate):
@@ -126,12 +168,10 @@ def update_task(task_id: int, task_update: TaskUpdate):
             setattr(task, field, value)
         db.commit()
         db.refresh(task)
-        return {"id": task.id, "title": task.title, "description": task.description,
-                "priority": task.priority, "category": task.category,
-                "estimated_time": task.estimated_time, "status": task.status,
-                "created_at": task.created_at.isoformat()}
+        return _task_dict(task)
     finally:
         db.close()
+
 
 @app.delete("/api/tasks/{task_id}")
 def delete_task(task_id: int):
@@ -145,3 +185,6 @@ def delete_task(task_id: int):
         return {"message": "Task deleted successfully"}
     finally:
         db.close()
+
+
+handler = Mangum(app)

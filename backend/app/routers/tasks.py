@@ -1,5 +1,6 @@
 import json
 from typing import List
+from datetime import datetime
 
 from google import genai
 from sqlalchemy.orm import Session
@@ -7,7 +8,7 @@ from fastapi import APIRouter, Depends, HTTPException
 
 from ..database import get_db
 from ..models import Task
-from ..schemas import TaskCreate, TaskUpdate, TaskResponse, AISuggestion
+from ..schemas import TaskCreate, TaskUpdate, TaskResponse, AISuggestion, TaskReorder
 from ..config import config
 
 router = APIRouter(prefix="/api/tasks", tags=["tasks"])
@@ -36,20 +37,43 @@ def get_ai_suggestion(title: str, description: str = "") -> AISuggestion:
 
 @router.get("/", response_model=List[TaskResponse])
 def get_tasks(db: Session = Depends(get_db)):
-    return db.query(Task).all()
+    # Tasks with an explicit order come first (sorted by order),
+    # then tasks without order fall back to created_at desc.
+    tasks = db.query(Task).all()
+    tasks.sort(key=lambda t: (t.order is None, t.order if t.order is not None else 0, t.created_at))
+    return tasks
+
+
+@router.post("/reorder", response_model=List[TaskResponse])
+def reorder_tasks(payload: TaskReorder, db: Session = Depends(get_db)):
+    """Accept an ordered list of task IDs and persist their new order."""
+    for position, task_id in enumerate(payload.ordered_ids):
+        task = db.query(Task).filter(Task.id == task_id).first()
+        if task:
+            task.order = position
+    db.commit()
+    tasks = db.query(Task).all()
+    tasks.sort(key=lambda t: (t.order is None, t.order if t.order is not None else 0, t.created_at))
+    return tasks
 
 
 @router.post("/", response_model=TaskResponse)
 def create_task(task: TaskCreate, db: Session = Depends(get_db)):
     suggestion = get_ai_suggestion(task.title, task.description or "")
 
+    # New tasks go to the end of the list
+    max_order = db.query(Task).count()
+
     db_task = Task(
         title=task.title,
         description=task.description,
         priority=suggestion.priority,
         category=suggestion.category,
-        estimated_time=suggestion.estimated_time
+        estimated_time=suggestion.estimated_time,
+        order=max_order,
+        created_at=datetime.utcnow()
     )
+
     db.add(db_task)
     db.commit()
     db.refresh(db_task)
