@@ -12,4 +12,5 @@ class Task(Base):
     category = Column(String, default="general")
     estimated_time = Column(String, nullable=True)
     status = Column(String, default="todo")
+    order = Column(Integer, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
